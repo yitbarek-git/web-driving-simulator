@@ -168,7 +168,7 @@ export function DrivingHUD({
         </div>
 
         {/* Speedometer, Tachometer & Gear Cluster */}
-        <div className="pointer-events-auto ml-auto flex items-center gap-2 rounded-xl border border-white/12 bg-zinc-950/88 px-2.5 py-2 shadow-xl sm:gap-4 sm:px-4 sm:py-3">
+        <div className="vehicle-status-cluster pointer-events-auto ml-auto flex items-center gap-2 rounded-xl border border-white/12 bg-zinc-950/88 px-2.5 py-2 shadow-xl sm:gap-4 sm:px-4 sm:py-3">
           {/* Active Vehicle State Text Indicators (never color-only) */}
           <div className="flex flex-col items-end gap-1.5 text-[11px] font-medium">
             <span

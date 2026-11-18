@@ -31,3 +31,48 @@
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
+
+.mobile-controls {
+  display: none;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.mobile-control-button {
+  width: 58px;
+  height: 58px;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.mobile-control-button[data-active="true"] {
+  transform: scale(0.94);
+  border-color: rgba(251, 191, 36, 0.7);
+  background: rgba(245, 158, 11, 0.28);
+  color: #fbbf24;
+}
+
+@media (hover: none), (pointer: coarse), (max-width: 767px), (orientation: landscape) and (max-height: 500px) {
+  .mobile-controls {
+    display: flex;
+  }
+
+  .vehicle-status-cluster {
+    display: none;
+  }
+}
+
+@media (hover: none) and (orientation: landscape), (pointer: coarse) and (orientation: landscape) {
+  .mobile-control-button {
+    width: 64px;
+    height: 64px;
+  }
+
+  .mobile-controls {
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+}

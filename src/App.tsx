@@ -3,6 +3,7 @@ import { SimulatorCanvas } from './components/scene/SimulatorCanvas';
 import { DrivingHUD } from './components/ui/DrivingHUD';
 import { MainMenu } from './components/ui/MainMenu';
 import { PauseMenu } from './components/ui/PauseMenu';
+import { MobileControls } from './components/ui/MobileControls';
 import {
   CAR_COLORS,
   type CameraMode,
@@ -111,6 +112,10 @@ export default function App() {
           onPause={handleTogglePause}
           onToggleHints={handleToggleHints}
         />
+      )}
+
+      {status === 'driving' && (
+        <MobileControls inputRef={inputRef} />
       )}
 
       {status === 'paused' && (
