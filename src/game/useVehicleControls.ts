@@ -6,6 +6,7 @@ interface ControlCallbacks {
   onCycleCamera: () => void;
   onTogglePause: () => void;
   onToggleHelp: () => void;
+  onInteract: () => void;
 }
 
 export function useVehicleControls(
@@ -92,6 +93,9 @@ export function useVehicleControls(
           break;
         case 'KeyH':
           callbacksRef.current.onToggleHelp();
+          break;
+        case 'KeyE':
+          callbacksRef.current.onInteract();
           break;
       }
     };

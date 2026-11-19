@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Hand } from 'lucide-react';
 import type { InputState } from '../../game/types';
 
-type MobileAction = 'left' | 'right' | 'throttle' | 'brake';
+type MobileAction = 'left' | 'right' | 'throttle' | 'brake' | 'handbrake';
 
 interface MobileControlsProps {
   inputRef: React.MutableRefObject<InputState>;
+  interactionPrompt: string;
+  onInteract: () => void;
 }
 
 const ACTION_LABELS: Record<MobileAction, string> = {
@@ -13,9 +15,14 @@ const ACTION_LABELS: Record<MobileAction, string> = {
   right: 'Steer right',
   throttle: 'Accelerate',
   brake: 'Brake',
+  handbrake: 'Handbrake',
 };
 
-export function MobileControls({ inputRef }: MobileControlsProps) {
+export function MobileControls({
+  inputRef,
+  interactionPrompt,
+  onInteract,
+}: MobileControlsProps) {
   const activePointers = useRef(new Map<number, MobileAction>());
   const [activeActions, setActiveActions] = useState<Set<MobileAction>>(new Set());
 
@@ -24,6 +31,7 @@ export function MobileControls({ inputRef }: MobileControlsProps) {
     inputRef.current.right = actions.has('right');
     inputRef.current.throttle = actions.has('throttle');
     inputRef.current.brake = actions.has('brake');
+    inputRef.current.handbrake = actions.has('handbrake');
   };
 
   const clearControls = () => {
@@ -121,6 +129,18 @@ export function MobileControls({ inputRef }: MobileControlsProps) {
         {controlButton('brake', <ArrowDown className="h-7 w-7" />)}
         {controlButton('throttle', <ArrowUp className="h-7 w-7" />)}
       </div>
+      <div className="pointer-events-auto absolute bottom-3 left-1/2 -translate-x-1/2">
+        {controlButton('handbrake', <Hand className="h-6 w-6" />)}
+      </div>
+      {interactionPrompt.startsWith('Press E') && (
+        <button
+          type="button"
+          onClick={onInteract}
+          className="pointer-events-auto absolute bottom-20 left-1/2 -translate-x-1/2 rounded-full border border-amber-300/50 bg-zinc-950/75 px-4 py-2 text-xs font-semibold text-amber-100 shadow-lg"
+        >
+          {interactionPrompt.includes('drop off') ? 'Stop · Drop off' : 'Stop · Pick up'}
+        </button>
+      )}
     </div>
   );
 }

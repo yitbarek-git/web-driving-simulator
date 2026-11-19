@@ -24,27 +24,27 @@ export const GUARDRAIL_OFFSET = ROAD_WIDTH / 2 + SHOULDER_WIDTH - 0.35; // 9.25m
 export const TRACK_SAMPLE_COUNT = 720;
 
 /**
- * Generates a scenic ~3 km closed highway loop with fast straights,
- * sweeping valley curves, and subtle elevation undulations.
+ * Generates a winding ~3 km highway with a learning straight, high pass,
+ * switchbacks, valley curves, and sustained elevation changes.
  */
 function buildHighwaySpline(): THREE.CatmullRomCurve3 {
   const waypoints: [number, number, number][] = [
     [0, 0, 0],
-    [0, 0.5, -240],
-    [35, 2.2, -460],
-    [140, 4.5, -620],
-    [310, 6.0, -680],
-    [490, 4.8, -610],
-    [620, 2.4, -440],
-    [660, 1.0, -210],
-    [590, 0.4, 30],
-    [450, 1.5, 220],
-    [290, 3.2, 340],
-    [130, 2.4, 390],
-    [-40, 1.0, 350],
-    [-160, 0.2, 230],
-    [-120, 0.0, 110],
-    [-25, 0.0, 45],
+    [0, 15, -240],
+    [35, 36, -460],
+    [140, 68, -620],
+    [310, 92, -680],
+    [490, 82, -610],
+    [620, 52, -440],
+    [660, 25, -210],
+    [590, 8, 30],
+    [450, 15, 220],
+    [290, 35, 340],
+    [130, 40, 390],
+    [-40, 25, 350],
+    [-160, 11, 230],
+    [-120, 2, 110],
+    [0, 0, 120],
   ];
 
   const vectors = waypoints.map(([x, y, z]) => new THREE.Vector3(x, y, z));

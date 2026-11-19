@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import * as THREE from 'three';
+import { useFrame } from '@react-three/fiber';
 import { createContactShadowTexture } from '../../game/proceduralTextures';
 import type { CarColorOption } from '../../game/types';
 
@@ -9,6 +10,7 @@ export interface SportsCarHandle {
     y: number,
     z: number,
     yaw: number,
+    roadPitch: number,
     pitch: number,
     roll: number,
     steerAngle: number,
@@ -21,10 +23,20 @@ export interface SportsCarHandle {
 interface SportsCarModelProps {
   paintColor: CarColorOption;
   isSoftwareGl?: boolean;
+  passengerOnBoard?: boolean;
+  nightMode?: boolean;
 }
 
 export const SportsCarModel = forwardRef<SportsCarHandle, SportsCarModelProps>(
-  function SportsCarModel({ paintColor, isSoftwareGl = false }, ref) {
+  function SportsCarModel(
+    {
+      paintColor,
+      isSoftwareGl = false,
+      passengerOnBoard = false,
+      nightMode = false,
+    },
+    ref,
+  ) {
     const rootRef = useRef<THREE.Group>(null);
     const chassisRef = useRef<THREE.Group>(null);
     const flSteerRef = useRef<THREE.Group>(null);
@@ -32,6 +44,8 @@ export const SportsCarModel = forwardRef<SportsCarHandle, SportsCarModelProps>(
     const wheelSpinRefs = useRef<(THREE.Group | null)[]>([null, null, null, null]);
     const brakeMatRef = useRef<THREE.MeshStandardMaterial>(null);
     const reverseMatRef = useRef<THREE.MeshStandardMaterial>(null);
+    const passengerRef = useRef<THREE.Group>(null);
+    const passengerScaleRef = useRef(0);
 
     // Build sculpted side-silhouette extruded body & greenhouse geometries
     const geometries = useMemo(() => {
@@ -99,6 +113,19 @@ export const SportsCarModel = forwardRef<SportsCarHandle, SportsCarModelProps>(
 
     const shadowTexture = useMemo(() => createContactShadowTexture(), []);
 
+    useFrame((_, delta) => {
+      passengerScaleRef.current = THREE.MathUtils.damp(
+        passengerScaleRef.current,
+        passengerOnBoard ? 1 : 0,
+        5,
+        Math.min(delta, 0.05),
+      );
+      if (passengerRef.current) {
+        passengerRef.current.scale.setScalar(passengerScaleRef.current);
+        passengerRef.current.visible = passengerScaleRef.current > 0.02;
+      }
+    });
+
     useEffect(() => {
       return () => {
         Object.values(geometries).forEach((g) => g.dispose());
@@ -112,6 +139,7 @@ export const SportsCarModel = forwardRef<SportsCarHandle, SportsCarModelProps>(
         y,
         z,
         yaw,
+        roadPitch,
         pitch,
         roll,
         steerAngle,
@@ -121,7 +149,7 @@ export const SportsCarModel = forwardRef<SportsCarHandle, SportsCarModelProps>(
       ) => {
         if (rootRef.current) {
           rootRef.current.position.set(x, y, z);
-          rootRef.current.rotation.set(0, yaw, 0);
+          rootRef.current.rotation.set(roadPitch, yaw, 0);
         }
         if (chassisRef.current) {
           chassisRef.current.rotation.set(pitch, 0, roll);
@@ -289,6 +317,25 @@ export const SportsCarModel = forwardRef<SportsCarHandle, SportsCarModelProps>(
 
     return (
       <group ref={rootRef}>
+        {nightMode && (
+          <>
+            <pointLight
+              position={[-0.62, 0.62, -2.05]}
+              color="#dbeafe"
+              intensity={18}
+              distance={38}
+              decay={2}
+            />
+            <pointLight
+              position={[0.62, 0.62, -2.05]}
+              color="#dbeafe"
+              intensity={18}
+              distance={38}
+              decay={2}
+            />
+          </>
+        )}
+
         {/* Grounded radial contact shadow */}
         <mesh position={[0, 0.025, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={1}>
           <planeGeometry args={[2.7, 5.1]} />
@@ -450,6 +497,17 @@ export const SportsCarModel = forwardRef<SportsCarHandle, SportsCarModelProps>(
 
         {/* 12. Four articulated wheels */}
         {wheelPositions.map((wp, idx) => renderWheel(idx, wp))}
+
+        <group ref={passengerRef} position={[0.38, 0.92, 0.15]} visible={false}>
+          <mesh position={[0, 0.32, 0]} castShadow>
+            <cylinderGeometry args={[0.16, 0.2, 0.48, 8]} />
+            <meshStandardMaterial color="#4d6982" roughness={0.82} />
+          </mesh>
+          <mesh position={[0, 0.68, 0]} castShadow>
+            <sphereGeometry args={[0.15, 10, 8]} />
+            <meshStandardMaterial color="#d5aa86" roughness={0.84} />
+          </mesh>
+        </group>
       </group>
     );
   },

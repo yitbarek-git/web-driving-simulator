@@ -4,11 +4,14 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { HighwayEnvironment } from './HighwayEnvironment';
 import { SportsCarModel, type SportsCarHandle } from './SportsCarModel';
+import { TrafficVehicles } from './TrafficVehicles';
+import { CAREER_LEVELS } from '../../game/career';
 import { VehiclePhysicsEngine } from '../../game/vehiclePhysics';
 import type {
   CameraMode,
   CarColorOption,
   GameStatus,
+  GraphicsQuality,
   InputState,
   VehicleTelemetry,
 } from '../../game/types';
@@ -47,6 +50,10 @@ interface SceneContentProps {
   paintColor: CarColorOption;
   inputRef: React.MutableRefObject<InputState>;
   resetCounter: number;
+  selectedLevel: number;
+  waitingStation?: number;
+  passengerOnBoard: boolean;
+  steeringSensitivity: number;
   isSoftwareGl: boolean;
   onTelemetry: (telemetry: VehicleTelemetry) => void;
 }
@@ -57,6 +64,10 @@ function SceneContent({
   paintColor,
   inputRef,
   resetCounter,
+  selectedLevel,
+  waitingStation,
+  passengerOnBoard,
+  steeringSensitivity,
   isSoftwareGl,
   onTelemetry,
 }: SceneContentProps) {
@@ -67,6 +78,8 @@ function SceneContent({
   const hudTimerRef = useRef(0);
   const menuOrbitAngleRef = useRef(0.55);
   const camInitializedRef = useRef(false);
+  const elapsedSecondsRef = useRef(0);
+  const level = CAREER_LEVELS[selectedLevel - 1];
 
   // Mandatory Studio Environment Reflection (RoomEnvironment + PMREM) & Horizon Fog
   useEffect(() => {
@@ -85,6 +98,13 @@ function SceneContent({
       pmrem.dispose();
     };
   }, [gl, scene, camera, isSoftwareGl]);
+
+  useEffect(() => {
+    if (scene.fog instanceof THREE.FogExp2) {
+      scene.fog.color.set(selectedLevel === 8 ? '#b8c5cc' : '#cfdbe6');
+      scene.fog.density = selectedLevel === 8 ? 0.0031 : 0.00145;
+    }
+  }, [scene, selectedLevel]);
 
   // Reset vehicle when resetCounter increments
   useEffect(() => {
@@ -106,10 +126,17 @@ function SceneContent({
     const dt = Math.min(delta, 0.05);
 
     if (status === 'driving') {
-      physics.step(dt, inputRef.current, true);
+      physics.step(
+        dt,
+        inputRef.current,
+        true,
+        level.trafficCount,
+        steeringSensitivity,
+      );
     } else if (status === 'menu') {
       physics.step(dt, inputRef.current, false);
     }
+    elapsedSecondsRef.current = physics.elapsedSeconds;
 
     // Push transforms to 3D car model imperatively
     if (carRef.current) {
@@ -118,6 +145,7 @@ function SceneContent({
         physics.position.y,
         physics.position.z,
         physics.yaw,
+        physics.roadPitch,
         physics.bodyPitch,
         physics.bodyRoll,
         physics.steerAngle,
@@ -221,8 +249,9 @@ function SceneContent({
 
       // Subtle collision shake
       if (physics.collisionFlash > 0.05) {
-        _camGoalPos.x += (Math.random() - 0.5) * physics.collisionFlash * 0.28;
-        _camGoalPos.y += (Math.random() - 0.5) * physics.collisionFlash * 0.18;
+        const shake = physics.collisionFlash * 0.13;
+        _camGoalPos.x += Math.sin(physics.elapsedSeconds * 38) * shake;
+        _camGoalPos.y += Math.cos(physics.elapsedSeconds * 31) * shake * 0.55;
       }
 
       _camGoalLook
@@ -230,7 +259,7 @@ function SceneContent({
         .addScaledVector(_forwardVec, lookAhead);
       _camGoalLook.y += lookHeight;
 
-      if (!camInitializedRef.current || cameraMode === 'hood') {
+      if (!camInitializedRef.current) {
         camera.position.copy(_camGoalPos);
         _currentLook.copy(_camGoalLook);
         camInitializedRef.current = true;
@@ -280,11 +309,13 @@ function SceneContent({
   return (
     <>
       {/* Warm/Cool Daylight Lighting Rig */}
-      <hemisphereLight args={['#a9ccf0', '#4f5d42', 0.72]} />
+      <hemisphereLight
+        args={['#a9ccf0', '#4f5d42', selectedLevel === 10 ? 0.3 : 0.72]}
+      />
       <directionalLight
         ref={sunRef}
         color="#fff6e6"
-        intensity={2.1}
+        intensity={selectedLevel === 10 ? 0.75 : 2.1}
         castShadow={!isSoftwareGl}
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
@@ -303,11 +334,21 @@ function SceneContent({
         intensity={0.45}
       />
 
-      <HighwayEnvironment isSoftwareGl={isSoftwareGl} />
+      <HighwayEnvironment
+        isSoftwareGl={isSoftwareGl}
+        night={selectedLevel === 10}
+        waitingStation={waitingStation}
+      />
+      <TrafficVehicles
+        count={status === 'menu' ? 0 : level.trafficCount}
+        elapsedSecondsRef={elapsedSecondsRef}
+      />
       <SportsCarModel
         ref={carRef}
         paintColor={paintColor}
         isSoftwareGl={isSoftwareGl}
+        passengerOnBoard={passengerOnBoard}
+        nightMode={selectedLevel === 10}
       />
     </>
   );
@@ -319,6 +360,11 @@ interface SimulatorCanvasProps {
   paintColor: CarColorOption;
   inputRef: React.MutableRefObject<InputState>;
   resetCounter: number;
+  selectedLevel: number;
+  waitingStation?: number;
+  passengerOnBoard: boolean;
+  steeringSensitivity: number;
+  graphicsQuality: GraphicsQuality;
   onTelemetry: (telemetry: VehicleTelemetry) => void;
 }
 
@@ -328,9 +374,16 @@ export function SimulatorCanvas({
   paintColor,
   inputRef,
   resetCounter,
+  selectedLevel,
+  waitingStation,
+  passengerOnBoard,
+  steeringSensitivity,
+  graphicsQuality,
   onTelemetry,
 }: SimulatorCanvasProps) {
   const webglProbe = useMemo(() => detectSoftwareWebGL(), []);
+  const performanceMode =
+    webglProbe.isSoftwareGl || graphicsQuality === 'performance';
   const [contextError, setContextError] = useState<string | null>(
     webglProbe.supported
       ? null
@@ -355,11 +408,11 @@ export function SimulatorCanvas({
   return (
     <div className="relative h-full w-full overflow-hidden">
       <Canvas
-        shadows={!webglProbe.isSoftwareGl}
-        dpr={webglProbe.isSoftwareGl ? 1 : [1, 2]}
+        shadows={!performanceMode}
+        dpr={performanceMode ? 1 : [1, 2]}
         camera={{ fov: 56, near: 0.2, far: 1800, position: [6, 2.5, 6] }}
         gl={{
-          antialias: !webglProbe.isSoftwareGl,
+          antialias: !performanceMode,
           powerPreference: 'high-performance',
           toneMapping: THREE.ACESFilmicToneMapping,
           toneMappingExposure: 1.08,
@@ -384,7 +437,11 @@ export function SimulatorCanvas({
           paintColor={paintColor}
           inputRef={inputRef}
           resetCounter={resetCounter}
-          isSoftwareGl={webglProbe.isSoftwareGl}
+          selectedLevel={selectedLevel}
+          waitingStation={waitingStation}
+          passengerOnBoard={passengerOnBoard}
+          steeringSensitivity={steeringSensitivity}
+          isSoftwareGl={performanceMode}
           onTelemetry={onTelemetry}
         />
       </Canvas>

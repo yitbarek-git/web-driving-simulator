@@ -5,9 +5,10 @@ interface MinimapProps {
   carX: number;
   carZ: number;
   carYaw: number;
+  target?: { x: number; z: number };
 }
 
-export function Minimap({ carX, carZ, carYaw }: MinimapProps) {
+export function Minimap({ carX, carZ, carYaw, target }: MinimapProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -51,6 +52,24 @@ export function Minimap({ carX, carZ, carYaw }: MinimapProps) {
     ctx.lineWidth = 2.2;
     ctx.stroke();
 
+    HIGHWAY_TRACK.samples.forEach((sample, index) => {
+      if (index % 90 !== 0) return;
+      ctx.beginPath();
+      ctx.arc(toScreenX(sample.point.x), toScreenY(sample.point.z), 1.8, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.44)';
+      ctx.fill();
+    });
+
+    if (target) {
+      ctx.beginPath();
+      ctx.arc(toScreenX(target.x), toScreenY(target.z), 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#f59e0b';
+      ctx.fill();
+      ctx.strokeStyle = '#fff7ed';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
+
     // Start/finish marker
     const start = HIGHWAY_TRACK.samples[0].point;
     ctx.fillStyle = '#e2e8f0';
@@ -78,7 +97,7 @@ export function Minimap({ carX, carZ, carYaw }: MinimapProps) {
     ctx.lineWidth = 1.2;
     ctx.stroke();
     ctx.restore();
-  }, [carX, carZ, carYaw]);
+  }, [carX, carZ, carYaw, target]);
 
   return (
     <div className="w-[116px] rounded-lg border border-white/10 bg-zinc-950/85 p-1.5 shadow-lg sm:w-[164px] sm:p-2">

@@ -4,11 +4,12 @@ import {
   HIGHWAY_TRACK,
   ROAD_WIDTH,
 } from './track';
+import { getTrafficPose } from './traffic';
 import type { GearLabel, InputState, VehicleTelemetry } from './types';
 
 const GEAR_SPEED_THRESHOLDS_KMH = [0, 42, 82, 126, 172, 218, 265];
-const MAX_FORWARD_SPEED_MS = 255 / 3.6; // ~70.8 m/s (255 km/h)
-const MAX_REVERSE_SPEED_MS = 52 / 3.6; // ~14.4 m/s (52 km/h)
+const MAX_FORWARD_SPEED_MS = 500 / 3.6;
+const MAX_REVERSE_SPEED_MS = 10 / 3.6;
 
 export class VehiclePhysicsEngine {
   position = new THREE.Vector3();
@@ -17,6 +18,7 @@ export class VehiclePhysicsEngine {
   vz = 0;
   steerAngle = 0;
   wheelSpin = 0;
+  roadPitch = 0;
   bodyPitch = 0;
   bodyRoll = 0;
   distanceMeters = 0;
@@ -28,10 +30,12 @@ export class VehiclePhysicsEngine {
   isHandbrake = false;
   isOffRoad = false;
   collisionFlash = 0;
+  collisionCount = 0;
   trackProgress = 0;
 
   private lastTrackIndex = 0;
   private prevForwardSpeed = 0;
+  private collisionCooldown = 0;
 
   constructor() {
     this.reset();
@@ -45,6 +49,7 @@ export class VehiclePhysicsEngine {
     this.vz = 0;
     this.steerAngle = 0;
     this.wheelSpin = 0;
+    this.roadPitch = 0;
     this.bodyPitch = 0;
     this.bodyRoll = 0;
     this.rpm = 900;
@@ -54,7 +59,9 @@ export class VehiclePhysicsEngine {
     this.isHandbrake = false;
     this.isOffRoad = false;
     this.collisionFlash = 0;
+    this.collisionCount = 0;
     this.prevForwardSpeed = 0;
+    this.collisionCooldown = 0;
     this.lastTrackIndex = 0;
     this.trackProgress = 0;
   }
@@ -64,8 +71,18 @@ export class VehiclePhysicsEngine {
     this.elapsedSeconds = 0;
   }
 
-  step(dt: number, input: InputState, isActiveDriving: boolean): void {
+  step(
+    dt: number,
+    input: InputState,
+    isActiveDriving: boolean,
+    trafficCount = 0,
+    steeringSensitivity = 1,
+  ): void {
     const clampedDt = Math.min(Math.max(dt, 0.001), 0.05);
+    this.collisionCooldown = Math.max(
+      0,
+      this.collisionCooldown - clampedDt,
+    );
     if (isActiveDriving) {
       this.elapsedSeconds += clampedDt;
     }
@@ -94,10 +111,12 @@ export class VehiclePhysicsEngine {
 
     // 1. Speed-dependent steering geometry
     // Max steering angle shrinks smoothly at highway speeds for composed stability
-    const speedNorm = THREE.MathUtils.clamp(speedKmh / 220, 0, 1);
-    const maxSteer = THREE.MathUtils.lerp(0.54, 0.16, Math.pow(speedNorm, 0.72));
-    const targetSteer = steerInput * maxSteer;
-    const steerRate = steerInput !== 0 ? 7.5 : 10.5;
+    const maxSteer = 0.0013 + 0.42 / (1 + Math.pow(speedKmh / 11, 2));
+    const targetSteer =
+      steerInput *
+      maxSteer *
+      THREE.MathUtils.clamp(steeringSensitivity, 0.5, 1.5);
+    const steerRate = steerInput !== 0 ? 2.4 : 4.2;
     this.steerAngle = THREE.MathUtils.damp(
       this.steerAngle,
       targetSteer,
@@ -113,7 +132,7 @@ export class VehiclePhysicsEngine {
     if (throttle > 0) {
       if (vForward < -1.0) {
         // Braking from reverse motion before launching forward
-        longAccel += 24.0;
+        longAccel += 12.0;
         brakingActive = true;
       } else {
         // Realistic torque curve: strong low-end launch, tapering at top speed
@@ -131,11 +150,11 @@ export class VehiclePhysicsEngine {
     if (brakeInput > 0) {
       if (vForward > 1.2) {
         // Service brakes
-        longAccel -= 26.0;
+        longAccel -= 11.0;
         brakingActive = true;
       } else if (vForward > -MAX_REVERSE_SPEED_MS) {
         // Reverse gear engagement once nearly stopped
-        longAccel -= 9.5;
+        longAccel -= 4.5;
         reversingActive = true;
       }
     } else if (vForward < -0.5) {
@@ -145,7 +164,7 @@ export class VehiclePhysicsEngine {
     if (handbrake) {
       brakingActive = true;
       if (Math.abs(vForward) > 0.3) {
-        longAccel -= Math.sign(vForward) * 20.0;
+        longAccel -= Math.sign(vForward) * 14.0;
       } else {
         vForward = 0;
       }
@@ -159,15 +178,24 @@ export class VehiclePhysicsEngine {
       Math.abs(vForward) > 0.05
         ? -Math.sign(vForward) * rollingCoeff
         : 0;
+    const hillHold = throttle === 0 && brakeInput === 0 && Math.abs(vForward) < 0.4;
 
-    longAccel += aeroDrag + rollingDrag;
+    const roadGrade = HIGHWAY_TRACK.findClosest(
+      this.position.x,
+      this.position.z,
+      this.lastTrackIndex,
+    ).tangent.y;
+    longAccel +=
+      aeroDrag +
+      rollingDrag -
+      (isActiveDriving && !hillHold ? 9.81 * roadGrade : 0);
     vForward += longAccel * clampedDt;
 
     // Prevent micro-creep when coasting at standstill
     if (
       throttle === 0 &&
       brakeInput === 0 &&
-      Math.abs(vForward) < 0.25
+      Math.abs(vForward) < 0.8
     ) {
       vForward = 0;
     }
@@ -196,7 +224,7 @@ export class VehiclePhysicsEngine {
     const nRightZ = -nSinY;
 
     // Lateral grip scrubs side-slip velocity; lower grip during handbrake or off-road
-    const lateralGrip = handbrake ? 2.6 : this.isOffRoad ? 5.0 : 9.2;
+    const lateralGrip = handbrake ? 2.1 : this.isOffRoad ? 3.8 : 8.0;
     vLateral = THREE.MathUtils.damp(vLateral, 0, lateralGrip, clampedDt);
 
     // Reconstruct world XZ velocity
@@ -218,6 +246,12 @@ export class VehiclePhysicsEngine {
     this.lastTrackIndex = trackInfo.sampleIndex;
     this.trackProgress = trackInfo.t;
     this.isOffRoad = trackInfo.distanceFromCenter > ROAD_WIDTH * 0.5;
+    this.roadPitch = THREE.MathUtils.damp(
+      this.roadPitch,
+      Math.asin(THREE.MathUtils.clamp(trackInfo.tangent.y, -0.5, 0.5)),
+      10,
+      clampedDt,
+    );
 
     // Guardrail collision boundary at ±GUARDRAIL_OFFSET
     const carHalfWidth = 0.98;
@@ -245,7 +279,34 @@ export class VehiclePhysicsEngine {
 
         if (vNormal > 2.2) {
           this.collisionFlash = Math.min(1, vNormal / 14);
+          if (this.collisionCooldown === 0) {
+            this.collisionCount += 1;
+            this.collisionCooldown = 0.85;
+          }
         }
+      }
+    }
+
+    for (let i = 0; i < (isActiveDriving ? trafficCount : 0); i++) {
+      const traffic = getTrafficPose(i, this.elapsedSeconds, trafficCount);
+      const dx = this.position.x - traffic.x;
+      const dz = this.position.z - traffic.z;
+      const distance = Math.hypot(dx, dz);
+      if (distance < 4.2 && distance > 0.001) {
+        if (this.collisionCooldown === 0) {
+          const impact = Math.hypot(this.vx, this.vz);
+          const nx = dx / distance;
+          const nz = dz / distance;
+          const overlap = 4.2 - distance;
+          this.position.x += nx * overlap;
+          this.position.z += nz * overlap;
+          this.vx = (this.vx + nx * 2.8) * 0.56;
+          this.vz = (this.vz + nz * 2.8) * 0.56;
+          this.collisionFlash = Math.min(1, Math.max(0.35, impact / 18));
+          this.collisionCount += 1;
+          this.collisionCooldown = 0.85;
+        }
+        break;
       }
     }
 
@@ -357,6 +418,7 @@ export class VehiclePhysicsEngine {
       isHandbrake: this.isHandbrake,
       isOffRoad: this.isOffRoad,
       collisionFlash: this.collisionFlash,
+      collisionCount: this.collisionCount,
       trackProgress: this.trackProgress,
     };
   }

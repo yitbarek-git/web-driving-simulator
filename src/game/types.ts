@@ -4,6 +4,8 @@ export type CameraMode = 'chase' | 'far' | 'hood' | 'orbit';
 
 export type GearLabel = 'R' | 'N' | '1' | '2' | '3' | '4' | '5' | '6';
 
+export type GraphicsQuality = 'quality' | 'performance';
+
 export interface CarColorOption {
   id: string;
   name: string;
@@ -52,5 +54,6 @@ export interface VehicleTelemetry {
   isHandbrake: boolean;
   isOffRoad: boolean;
   collisionFlash: number;
+  collisionCount: number;
   trackProgress: number;
 }

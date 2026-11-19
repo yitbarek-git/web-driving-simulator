@@ -11,9 +11,12 @@ import {
   createAsphaltTextures,
   createGrassTexture,
 } from '../../game/proceduralTextures';
+import { RoadsideStations } from './RoadsideStations';
 
 interface HighwayEnvironmentProps {
   isSoftwareGl: boolean;
+  night?: boolean;
+  waitingStation?: number;
 }
 
 const SKY_VERTEX_SHADER = `
@@ -28,19 +31,20 @@ const SKY_VERTEX_SHADER = `
 const SKY_FRAGMENT_SHADER = `
   varying vec3 vWorldPos;
   uniform vec3 uSunDir;
+  uniform float uNight;
   void main() {
     vec3 dir = normalize(vWorldPos);
     float h = clamp(dir.y, 0.0, 1.0);
-    vec3 horizon = vec3(0.79, 0.85, 0.91);
-    vec3 midSky = vec3(0.42, 0.63, 0.84);
-    vec3 zenith = vec3(0.18, 0.39, 0.65);
+    vec3 horizon = mix(vec3(0.79, 0.85, 0.91), vec3(0.075, 0.095, 0.14), uNight);
+    vec3 midSky = mix(vec3(0.42, 0.63, 0.84), vec3(0.025, 0.045, 0.095), uNight);
+    vec3 zenith = mix(vec3(0.18, 0.39, 0.65), vec3(0.004, 0.012, 0.038), uNight);
 
     vec3 col = mix(horizon, midSky, pow(h, 0.48));
     col = mix(col, zenith, smoothstep(0.25, 0.9, h));
 
     float sunDot = max(dot(dir, normalize(uSunDir)), 0.0);
-    col += vec3(1.0, 0.93, 0.80) * pow(sunDot, 22.0) * 0.28;
-    col += vec3(1.0, 0.97, 0.90) * pow(sunDot, 280.0) * 0.75;
+    col += vec3(1.0, 0.93, 0.80) * pow(sunDot, 22.0) * 0.28 * (1.0 - uNight);
+    col += vec3(1.0, 0.97, 0.90) * pow(sunDot, 280.0) * 0.75 * (1.0 - uNight);
 
     gl_FragColor = vec4(col, 1.0);
   }
@@ -157,7 +161,11 @@ function buildGuardrailBeamGeometry(sideSign: 1 | -1): THREE.BufferGeometry {
   return geo;
 }
 
-export function HighwayEnvironment({ isSoftwareGl }: HighwayEnvironmentProps) {
+export function HighwayEnvironment({
+  isSoftwareGl,
+  night = false,
+  waitingStation,
+}: HighwayEnvironmentProps) {
   const { gl } = useThree();
   const maxAnisotropy = useMemo(
     () => (isSoftwareGl ? 1 : Math.min(gl.capabilities.getMaxAnisotropy(), 8)),
@@ -389,8 +397,9 @@ export function HighwayEnvironment({ isSoftwareGl }: HighwayEnvironmentProps) {
   const skyUniforms = useMemo(
     () => ({
       uSunDir: { value: new THREE.Vector3(0.45, 0.38, -0.78).normalize() },
+      uNight: { value: night ? 1 : 0 },
     }),
-    [],
+    [night],
   );
 
   return (
@@ -487,6 +496,8 @@ export function HighwayEnvironment({ isSoftwareGl }: HighwayEnvironmentProps) {
         <dodecahedronGeometry args={[1.0, 0]} />
         <meshStandardMaterial roughness={0.9} metalness={0.05} />
       </instancedMesh>
+
+      <RoadsideStations waitingStation={waitingStation} />
     </group>
   );
 }

@@ -1,10 +1,15 @@
-import { Home, Play, RotateCcw } from 'lucide-react';
+import { Home, Play, RotateCcw, Volume2, VolumeX } from 'lucide-react';
 import { CAR_COLORS, type CarColorOption } from '../../game/types';
+import type { GameSettings } from '../../game/settings';
 
 interface PauseMenuProps {
   selectedColor: CarColorOption;
   distanceMeters: number;
+  settings: GameSettings;
+  audioEnabled: boolean;
   onSelectColor: (color: CarColorOption) => void;
+  onSettingsChange: (settings: GameSettings) => void;
+  onToggleAudio: () => void;
   onResume: () => void;
   onReset: () => void;
   onReturnToMenu: () => void;
@@ -13,7 +18,11 @@ interface PauseMenuProps {
 export function PauseMenu({
   selectedColor,
   distanceMeters,
+  settings,
+  audioEnabled,
   onSelectColor,
+  onSettingsChange,
+  onToggleAudio,
   onResume,
   onReset,
   onReturnToMenu,
@@ -34,6 +43,66 @@ export function PauseMenu({
             {formattedDistance} driven
           </span>
         </div>
+
+        <section className="mt-5 border-t border-white/10 pt-4">
+          <h3 className="text-xs font-semibold text-zinc-200">Driving settings</h3>
+          <label className="mt-3 block text-xs text-zinc-300">
+            <span className="flex items-center justify-between">
+              <span>Steering sensitivity</span>
+              <span className="font-mono-tabular text-amber-300">
+                {Math.round(settings.steeringSensitivity * 100)}%
+              </span>
+            </span>
+            <input
+              type="range"
+              min="0.5"
+              max="1.5"
+              step="0.05"
+              value={settings.steeringSensitivity}
+              onChange={(event) =>
+                onSettingsChange({
+                  ...settings,
+                  steeringSensitivity: Number(event.currentTarget.value),
+                })
+              }
+              className="mt-2 w-full accent-amber-400"
+            />
+          </label>
+          <label className="mt-3 flex items-center justify-between gap-3 text-xs text-zinc-300">
+            <span>Graphics</span>
+            <select
+              value={settings.graphicsQuality}
+              onChange={(event) =>
+                onSettingsChange({
+                  ...settings,
+                  graphicsQuality:
+                    event.currentTarget.value === 'performance'
+                      ? 'performance'
+                      : 'quality',
+                })
+              }
+              className="rounded-md border border-white/10 bg-zinc-900 px-2.5 py-1.5 text-xs text-white"
+            >
+              <option value="quality">Quality</option>
+              <option value="performance">Performance</option>
+            </select>
+          </label>
+          <div className="mt-3 flex items-center justify-between text-xs text-zinc-300">
+            <span>Audio</span>
+            <button
+              type="button"
+              onClick={onToggleAudio}
+              className="flex items-center gap-1.5 rounded-md border border-white/10 bg-zinc-900 px-2.5 py-1.5 text-white hover:bg-zinc-800"
+            >
+              {audioEnabled ? (
+                <Volume2 className="h-3.5 w-3.5" />
+              ) : (
+                <VolumeX className="h-3.5 w-3.5" />
+              )}
+              {audioEnabled ? 'On' : 'Off'}
+            </button>
+          </div>
+        </section>
 
         {/* Paint Quick Switch */}
         <div className="mt-5 border-t border-white/10 pt-4">
