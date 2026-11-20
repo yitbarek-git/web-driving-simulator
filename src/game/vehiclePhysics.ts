@@ -8,8 +8,8 @@ import { getTrafficPose } from './traffic';
 import type { GearLabel, InputState, VehicleTelemetry } from './types';
 
 const GEAR_SPEED_THRESHOLDS_KMH = [0, 42, 82, 126, 172, 218, 265];
-const MAX_FORWARD_SPEED_MS = 500 / 3.6;
-const MAX_REVERSE_SPEED_MS = 10 / 3.6;
+const MAX_FORWARD_SPEED_MS = 1000 / 3.6;
+const MAX_REVERSE_SPEED_MS = 50 / 3.6;
 
 export class VehiclePhysicsEngine {
   position = new THREE.Vector3();
